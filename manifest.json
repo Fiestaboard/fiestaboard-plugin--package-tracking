@@ -192,6 +192,14 @@
       ]
     }
   ],
+  "screenshots": [
+    {
+      "src": "docs/board-display.png",
+      "alt": "Package Tracking displayed on a Vestaboard",
+      "caption": "Track shipments from any carrier via 17TRACK and show their status on the board",
+      "primary": true
+    }
+  ],
   "demo": {
     "flagship": {
       "name": "Package Tracking Demo",

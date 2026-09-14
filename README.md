@@ -11,6 +11,8 @@ Amazon Logistics, China Post and ~2000 more carriers, with no per-carrier setup.
 registers each of your tracking numbers with 17TRACK once, then polls `gettrackinfo` on every
 refresh and exposes each package's carrier, normalized status and latest scan event.
 
+![Package Tracking Display](./docs/board-display.png)
+
 ## Template Variables
 
 ```
