@@ -1,0 +1,256 @@
+{
+  "id": "package_tracking",
+  "name": "Package Tracking",
+  "version": "1.0.0",
+  "description": "Track shipments from any carrier via 17TRACK and show their status on the board",
+  "author": "FiestaBoard Team",
+  "repository": "https://github.com/Fiestaboard/fiestaboard-plugin--package-tracking",
+  "documentation": "README.md",
+  "icon": "package",
+  "category": "utility",
+  "min_refresh_seconds": 600,
+  "settings_schema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable Package Tracking",
+        "default": false
+      },
+      "api_key": {
+        "type": "string",
+        "title": "17TRACK API Key",
+        "description": "Free key from api.17track.net (Settings > Security Key)",
+        "ui:widget": "password"
+      },
+      "tracking_numbers": {
+        "type": "string",
+        "title": "Tracking Numbers",
+        "description": "One per line or comma-separated, up to 10. Optional label: \"Mom's gift:1Z999AA10123456784\"",
+        "ui:widget": "textarea"
+      },
+      "auto_register": {
+        "type": "boolean",
+        "title": "Auto-register new numbers",
+        "description": "Register tracking numbers with 17TRACK automatically (uses your free quota)",
+        "default": true
+      },
+      "refresh_seconds": {
+        "type": "integer",
+        "title": "Refresh Interval (seconds)",
+        "description": "How often to check for tracking updates",
+        "default": 1800,
+        "minimum": 600,
+        "maximum": 86400
+      }
+    },
+    "required": [
+      "api_key",
+      "tracking_numbers"
+    ]
+  },
+  "env_vars": [
+    {
+      "name": "PACKAGE_TRACKING_ENABLED",
+      "required": false,
+      "description": "Enable package tracking feature",
+      "default": "false"
+    },
+    {
+      "name": "PACKAGE_TRACKING_API_KEY",
+      "required": false,
+      "description": "17TRACK API security key (alternative to the UI setting)"
+    }
+  ],
+  "variables": {
+    "groups": {
+      "packages": {
+        "label": "Packages"
+      },
+      "summary": {
+        "label": "Summary"
+      }
+    },
+    "simple": {
+      "count": {
+        "description": "Number of tracked packages",
+        "type": "number",
+        "max_length": 2,
+        "group": "summary",
+        "example": "3"
+      },
+      "delivered_count": {
+        "description": "Packages with status Delivered",
+        "type": "number",
+        "max_length": 2,
+        "group": "summary",
+        "example": "1"
+      },
+      "in_transit_count": {
+        "description": "Packages with status In Transit",
+        "type": "number",
+        "max_length": 2,
+        "group": "summary",
+        "example": "1"
+      },
+      "out_for_delivery_count": {
+        "description": "Packages with status Out for Delivery",
+        "type": "number",
+        "max_length": 2,
+        "group": "summary",
+        "example": "1"
+      },
+      "next_label": {
+        "description": "Label of the most urgent package (out for delivery > in transit > pending > delivered)",
+        "type": "string",
+        "max_length": 22,
+        "group": "summary",
+        "example": "Shoes"
+      },
+      "next_status": {
+        "description": "Status of the most urgent package",
+        "type": "string",
+        "max_length": 16,
+        "group": "summary",
+        "example": "Out for Delivery"
+      }
+    },
+    "arrays": {
+      "packages": {
+        "label_field": "label",
+        "item_fields": [
+          "label",
+          "number",
+          "carrier",
+          "status",
+          "status_code",
+          "last_event",
+          "last_update",
+          "days_in_transit"
+        ]
+      }
+    }
+  },
+  "max_lengths": {
+    "packages.*.label": 22,
+    "packages.*.number": 34,
+    "packages.*.carrier": 20,
+    "packages.*.status": 16,
+    "packages.*.status_code": 18,
+    "packages.*.last_event": 44,
+    "packages.*.last_update": 14,
+    "packages.*.days_in_transit": 3
+  },
+  "color_rules_schema": {
+    "next_status": {
+      "type": "exact",
+      "description": "Color based on the most urgent package's status",
+      "default_rules": [
+        {
+          "condition": "==",
+          "value": "Delivered",
+          "color": "green"
+        },
+        {
+          "condition": "==",
+          "value": "Out for Delivery",
+          "color": "yellow"
+        },
+        {
+          "condition": "==",
+          "value": "Exception",
+          "color": "red"
+        },
+        {
+          "condition": "==",
+          "value": "In Transit",
+          "color": "blue"
+        }
+      ]
+    }
+  },
+  "fiestaboard_version": ">=2.10.0",
+  "teaser": "{67}2 IN TRANSIT",
+  "previews": [
+    {
+      "device_type": "flagship",
+      "rows": [
+        "PACKAGES",
+        "{65}SHOES  OUT FOR DELIV",
+        "{67}HEADPHONES IN TRANSIT",
+        "{66}MOM'S GIFT  DELIVERED",
+        "{63}LAPTOP      EXCEPTION",
+        ""
+      ]
+    },
+    {
+      "device_type": "note",
+      "rows": [
+        "PACKAGES",
+        "{67}SHOES TRANSIT",
+        "{66}GIFT DELIVERED"
+      ]
+    }
+  ],
+  "demo": {
+    "flagship": {
+      "name": "Package Tracking Demo",
+      "template": [
+        "PACKAGES",
+        "{{package_tracking.packages.0.label}} {{package_tracking.packages.0.status}}",
+        "{{package_tracking.packages.1.label}} {{package_tracking.packages.1.status}}",
+        "{{package_tracking.packages.2.label}} {{package_tracking.packages.2.status}}",
+        "{{package_tracking.packages.3.label}} {{package_tracking.packages.3.status}}",
+        "{{package_tracking.packages.4.label}} {{package_tracking.packages.4.status}}"
+      ],
+      "line_metadata": [
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        }
+      ]
+    },
+    "note": {
+      "name": "Package Tracking (Note)",
+      "template": [
+        "PACKAGES",
+        "{{package_tracking.packages.0.label}} {{package_tracking.packages.0.status}}",
+        "{{package_tracking.packages.1.label}} {{package_tracking.packages.1.status}}"
+      ],
+      "line_metadata": [
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        },
+        {
+          "alignment": "left",
+          "wrap": false
+        }
+      ]
+    }
+  }
+}
