@@ -8,10 +8,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
+from src.devices import BoardContext
+
 from plugins.package_tracking import (
     ALREADY_REGISTERED_CODE,
     PackageTrackingPlugin,
     Plugin,
+    _fit_status,
     format_short_time,
     normalize_status,
     parse_tracking_numbers,
@@ -151,9 +154,9 @@ class TestValidateConfig:
     def test_too_many_tracking_numbers(self):
         plugin = PackageTrackingPlugin(manifest=MANIFEST)
         errors = plugin.validate_config(
-            {"api_key": "k", "tracking_numbers": ",".join(f"N{i}" for i in range(11))}
+            {"api_key": "k", "tracking_numbers": ",".join(f"N{i}" for i in range(25))}
         )
-        assert "Maximum 10 tracking numbers allowed" in errors
+        assert "Maximum 24 tracking numbers allowed" in errors
 
     def test_refresh_below_minimum(self):
         plugin = PackageTrackingPlugin(manifest=MANIFEST)
@@ -366,13 +369,15 @@ class TestFetchData:
         assert "No tracking numbers" in result.error
 
     @patch("plugins.package_tracking.requests.post")
-    def test_caps_at_ten_packages(self, mock_post):
+    def test_caps_at_max_packages(self, mock_post):
+        # 24 is the largest board's usable rows (8x8 note array, 24 rows,
+        # minus the "PACKAGES" header) -- see MAX_PACKAGES in __init__.py.
         plugin = make_plugin(
-            tracking_numbers=",".join(f"N{i}" for i in range(15)), auto_register=False
+            tracking_numbers=",".join(f"N{i}" for i in range(30)), auto_register=False
         )
         mock_post.return_value = ok(accepted=[])
 
-        assert plugin.fetch_data().data["count"] == 10
+        assert plugin.fetch_data().data["count"] == 24
 
 
 class TestConfigLifecycle:
@@ -430,3 +435,62 @@ class TestFormattedDisplay:
         mock_post.side_effect = requests.RequestException("down")
 
         assert plugin.get_formatted_display() is None
+
+    @patch("plugins.package_tracking.requests.post")
+    def test_note_board_abbreviates_status_instead_of_crushing_label(self, mock_post):
+        """Regression test for the 15-column truncation bug (__init__.py:278-280).
+
+        Before the fix, label_width = max(1, cols - len(status) - 1) floored
+        to 1 for any real status this long ("OUT FOR DELIVERY" is 17 chars
+        on a 15-column board), and the line was then blindly right-truncated
+        to `cols`, cutting the STATUS mid-word: "S OUT FOR DELIV". The fix
+        abbreviates the status first so the label keeps a readable width.
+        """
+        plugin = make_plugin(tracking_numbers="Shoes:A", auto_register=False)
+        mock_post.return_value = ok(
+            accepted=[{"number": "A", "track_info": track_info(status="OutForDelivery")}]
+        )
+        note = BoardContext(device_type="note", rows=3, cols=15)
+
+        with plugin._bound_board(note):
+            lines = plugin.get_formatted_display()
+
+        assert all(len(line) <= 15 for line in lines)
+        assert lines[1] == "SHOES OUT DLVRY"
+        assert "DELIV" not in lines[1]  # the old mid-word truncation
+
+    @patch("plugins.package_tracking.requests.post")
+    def test_note_board_does_not_crush_label_to_one_character(self, mock_post):
+        plugin = make_plugin(
+            tracking_numbers="Mom's gift:A\nLaptop:B", auto_register=False
+        )
+        mock_post.return_value = ok(
+            accepted=[
+                {"number": "A", "track_info": track_info(status="AvailableForPickup")},
+                {"number": "B", "track_info": track_info(status="DeliveryFailure")},
+            ]
+        )
+        note = BoardContext(device_type="note", rows=3, cols=15)
+
+        with plugin._bound_board(note):
+            lines = plugin.get_formatted_display()
+
+        assert all(len(line) <= 15 for line in lines)
+        assert lines[1] == "MOM'S GIF READY"
+        assert lines[2] == "LAPTOP   FAILED"
+        # Neither label was crushed to a single character (the old bug).
+        assert lines[1].split()[0] == "MOM'S"
+        assert lines[2].startswith("LAPTOP")
+
+
+class TestFitStatus:
+    def test_short_status_passes_through_unchanged(self):
+        assert _fit_status("In Transit", budget=11) == "IN TRANSIT"
+
+    def test_long_status_abbreviates_rather_than_truncates_midword(self):
+        assert _fit_status("Out for Delivery", budget=11) == "OUT DLVRY"
+        assert _fit_status("Ready for Pickup", budget=11) == "READY"
+        assert _fit_status("Delivery Failed", budget=11) == "FAILED"
+
+    def test_falls_back_to_truncation_if_even_abbreviation_does_not_fit(self):
+        assert _fit_status("Out for Delivery", budget=3) == "OUT"
