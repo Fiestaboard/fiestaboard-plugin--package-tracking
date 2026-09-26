@@ -83,7 +83,7 @@ green for Delivered, yellow for Out for Delivery, red for Exception, blue for In
 |---------|------|---------|-------------|
 | enabled | boolean | false | Enable/disable the plugin |
 | api_key | password | — | 17TRACK security key (required) |
-| tracking_numbers | string | — | Up to 10, comma- or newline-separated, optional `label:number` |
+| tracking_numbers | string | — | Up to 24, comma- or newline-separated, optional `label:number` |
 | auto_register | boolean | true | Register new numbers with 17TRACK automatically |
 | refresh_seconds | integer | 1800 | How often to poll (min 600) |
 

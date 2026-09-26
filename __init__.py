@@ -20,8 +20,29 @@ REGISTER_URL = API_BASE + "register"
 TRACKINFO_URL = API_BASE + "gettrackinfo"
 USER_AGENT = "FiestaBoard (https://github.com/FiestaBoard/FiestaBoard)"
 
-MAX_PACKAGES = 10
-LAST_EVENT_MAX_LENGTH = 44
+# The largest board FiestaBoard supports is an 8x8 note array: 24 rows, of
+# which 23 are usable once the "PACKAGES" header takes one (see
+# get_formatted_display). This cap governs both how many tracking numbers a
+# user may configure AND how many get registered with 17TRACK -- there is
+# deliberately only one cap, not a display cap layered on top of a
+# registration cap. Registration is idempotent per number (see
+# `_registered`, populated once and never re-sent), so the one-time 17TRACK
+# registration-quota cost of tracking N numbers is the same N regardless of
+# what this constant is; a lower per-widget ceiling does not save quota, it
+# only prevents a large panel from ever being filled. That's why this was
+# raised from 10 (a number with no relationship to any board) to 24, rather
+# than adding a second "registration cap" alongside a separate "display
+# cap": there is no quota benefit a second constant would buy here.
+MAX_PACKAGES = 24
+# Board-display bounds for fields that are otherwise unbounded user/upstream
+# text, so the values `fetch_data` emits stay honest with what manifest.json
+# declares in `max_lengths` (see README/PR for the audit). The raw tracking
+# number used to call 17TRACK (`entry["number"]`) is never clipped -- only
+# the copy exposed to templates/board rendering is.
+LABEL_MAX_LENGTH = 22
+NUMBER_DISPLAY_MAX_LENGTH = 22
+CARRIER_MAX_LENGTH = 20
+LAST_EVENT_MAX_LENGTH = 22
 ALREADY_REGISTERED_CODE = -18019901
 
 # 17TRACK raw status -> display status
@@ -36,6 +57,40 @@ STATUS_MAP = {
     "Exception": "Exception",
     "Expired": "Expired",
 }
+
+# Abbreviations for display statuses too long to fit a status field's share
+# of a narrow board (a Note, or any 1-wide note array, is 15 columns total).
+# Applied only when the full status does not fit -- see _fit_status below.
+# Every abbreviation is well under NOTE_COLS (15) even after also leaving
+# room for a few characters of label, which is the bug this fixes: without
+# an abbreviation, the old code shrank the LABEL to fit the status instead.
+STATUS_ABBREVIATIONS = {
+    "Out for Delivery": "OUT DLVRY",
+    "Ready for Pickup": "READY",
+    "Delivery Failed": "FAILED",
+}
+
+# However small the board, a package's label keeps at least this many
+# characters rather than being crushed to fit a long status string.
+MIN_LABEL_WIDTH = 3
+
+
+def _fit_status(status: str, budget: int) -> str:
+    """Return *status* uppercased, abbreviated or truncated to fit *budget* chars.
+
+    Prefers a whole-word abbreviation (e.g. "OUT DLVRY") over truncation, so
+    a long status never gets cut mid-word. Falls back to truncation only if
+    even the abbreviation doesn't fit (not expected at any real board width).
+    """
+    upper = status.upper()
+    if len(upper) <= budget:
+        return upper
+    abbreviation = STATUS_ABBREVIATIONS.get(status)
+    if abbreviation:
+        upper = abbreviation.upper()
+        if len(upper) <= budget:
+            return upper
+    return upper[:budget]
 
 # Most urgent first; decides which package becomes next_label / next_status
 URGENCY_ORDER = [
@@ -77,7 +132,9 @@ def parse_tracking_numbers(text: str) -> List[Dict[str, str]]:
         label, number = label.strip(), number.strip()
         if not number:
             continue
-        entries.append({"label": label or number, "number": number})
+        # Clip only the display label -- `number` stays full-length here;
+        # it is what gets sent to 17TRACK for registration/lookup.
+        entries.append({"label": (label or number)[:LABEL_MAX_LENGTH], "number": number})
     return entries
 
 
@@ -189,7 +246,7 @@ class PackageTrackingPlugin(PluginBase):
         carrier = ""
         events: List[Dict[str, Any]] = []
         if providers:
-            carrier = ((providers[0].get("provider") or {}).get("name")) or ""
+            carrier = (((providers[0].get("provider") or {}).get("name")) or "")[:CARRIER_MAX_LENGTH]
             for provider in providers:
                 events.extend(provider.get("events") or [])
 
@@ -210,7 +267,7 @@ class PackageTrackingPlugin(PluginBase):
 
         return {
             "label": entry["label"],
-            "number": entry["number"],
+            "number": entry["number"][:NUMBER_DISPLAY_MAX_LENGTH],
             "carrier": carrier,
             "status": status,
             "status_code": raw_status,
@@ -274,7 +331,13 @@ class PackageTrackingPlugin(PluginBase):
 
         lines = ["PACKAGES"]
         for package in result.data["packages"][: rows - 1]:
-            status = package["status"].upper()
+            # Abbreviate the status first if it doesn't fit, rather than
+            # crushing the label to make room for it: on a 15-column board
+            # "OUT FOR DELIVERY" (17 chars) alone left label_width <= 0,
+            # floored to 1, and the final f-string slice then cut the
+            # status itself mid-word ("OUT FOR DELIV").
+            status_budget = max(1, cols - MIN_LABEL_WIDTH - 1)
+            status = _fit_status(package["status"], status_budget)
             label_width = max(1, cols - len(status) - 1)
             label = package["label"].upper()[:label_width]
             lines.append(f"{label:<{label_width}} {status}"[:cols])

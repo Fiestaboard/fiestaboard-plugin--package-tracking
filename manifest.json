@@ -1,7 +1,7 @@
 {
   "id": "package_tracking",
   "name": "Package Tracking",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Track shipments from any carrier via 17TRACK and show their status on the board",
   "author": "FiestaBoard Team",
   "repository": "https://github.com/Fiestaboard/fiestaboard-plugin--package-tracking",
@@ -26,7 +26,7 @@
       "tracking_numbers": {
         "type": "string",
         "title": "Tracking Numbers",
-        "description": "One per line or comma-separated, up to 10. Optional label: \"Mom's gift:1Z999AA10123456784\"",
+        "description": "One per line or comma-separated, up to 24. Optional label: \"Mom's gift:1Z999AA10123456784\"",
         "ui:widget": "textarea"
       },
       "auto_register": {
@@ -110,7 +110,7 @@
       "next_status": {
         "description": "Status of the most urgent package",
         "type": "string",
-        "max_length": 16,
+        "max_length": 17,
         "group": "summary",
         "example": "Out for Delivery"
       }
@@ -133,11 +133,11 @@
   },
   "max_lengths": {
     "packages.*.label": 22,
-    "packages.*.number": 34,
+    "packages.*.number": 22,
     "packages.*.carrier": 20,
-    "packages.*.status": 16,
+    "packages.*.status": 17,
     "packages.*.status_code": 18,
-    "packages.*.last_event": 44,
+    "packages.*.last_event": 22,
     "packages.*.last_update": 14,
     "packages.*.days_in_transit": 3
   },
@@ -189,6 +189,20 @@
         "PACKAGES",
         "{67}SHOES TRANSIT",
         "{66}GIFT DELIVERED"
+      ]
+    },
+    {
+      "label": "Note Array (tall)",
+      "device_type": "note_array",
+      "notes_wide": 1,
+      "notes_tall": 2,
+      "rows": [
+        "PACKAGES",
+        "SHOES OUT DLVRY",
+        "MOM'S DELIVERED",
+        "BOOK IN TRANSIT",
+        "LAPTOP   FAILED",
+        "PHONE     READY"
       ]
     }
   ],
